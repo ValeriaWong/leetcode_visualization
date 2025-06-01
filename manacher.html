@@ -5,7 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Manacher Count Visualization</title>
   <style>
-    body { font-family: Arial, sans-serif; text-align: center; margin: 20px; }
+    body { font-family: Arial, sans-serif; margin: 20px; display: flex; gap: 30px; }
+    #visualArea { flex: 2; text-align: center; }
+    #codeArea { flex: 1; background: #f0f0f0; padding: 10px; border-radius: 8px; overflow-x: auto; white-space: pre-wrap; font-family: monospace; font-size: 14px; }
     .char-box { display: inline-block; width: 30px; height: 30px; line-height: 30px; border: 1px solid #ccc; margin: 2px; border-radius: 5px; background-color: #eef; }
     .highlight { background-color: #ffa; font-weight: bold; }
     .center { background-color: #8f8 !important; }
@@ -31,29 +33,58 @@
       background: #aaa;
       border-left: 1px dashed #aaa;
     }
+    .code-line { display: block; }
+    .code-highlight { background: #ffe58f; font-weight: bold; }
   </style>
 </head>
 <body>
-  <h1>Manacher Palindromic Substring Count Visualizer</h1>
-  <input type="text" id="inputString" placeholder="Enter string (e.g. abba)" />
-  <button onclick="startVisualization()">Start</button>
-  <div id="controls">
-    Delay: <input type="range" min="100" max="3000" step="100" value="1200" id="delaySlider">
-    <span id="delayValue">1200ms</span>
+  <div id="visualArea">
+    <h1>Manacher Palindromic Substring Count Visualizer</h1>
+    <input type="text" id="inputString" placeholder="Enter string (e.g. abba)" />
+    <button onclick="startVisualization()">Start</button>
+    <div id="controls">
+      Delay: <input type="range" min="100" max="3000" step="100" value="1200" id="delaySlider">
+      <span id="delayValue">1200ms</span>
+    </div>
+    <div id="playControls">
+      <button id="togglePlayBtn" onclick="togglePlay()">⏸ Pause</button>
+      <button onclick="stepPlay()">⏭ Step</button>
+    </div>
+    <div id="stepInfo"></div>
+    <div id="display">
+      <div id="charContainer"></div>
+      <div id="linesContainer"></div>
+    </div>
   </div>
-  <div id="playControls">
-    <button id="togglePlayBtn" onclick="togglePlay()">⏸ Pause</button>
-    <button onclick="stepPlay()">⏭ Step</button>
-  </div>
-  <div id="stepInfo"></div>
-  <div id="display">
-    <div id="charContainer"></div>
-    <div id="linesContainer"></div>
+  <div id="codeArea">
+    <div id="algorithmCode"></div>
   </div>
 
   <script>
     let playState = 'play';
     let stepResolve = null;
+    const rawCode = `for (let i = 0; i < n; i++) {
+  let mirror = 2 * C - i;
+  if (i < R) {
+    P[i] = Math.min(R - i, P[mirror]);
+  }
+
+  while (i + P[i] + 1 < n && i - P[i] - 1 >= 0 && t[i + P[i] + 1] === t[i - P[i] - 1]) {
+    P[i]++;
+  }
+
+  if (i + P[i] > R) {
+    C = i;
+    R = i + P[i];
+  }
+
+  totalCount += Math.floor((P[i] + 1) / 2);
+}`;
+
+    function displayCode(currentLine) {
+      const lines = rawCode.split('\n');
+      document.getElementById('algorithmCode').innerHTML = lines.map((line, idx) => `<span class="code-line ${idx === currentLine ? 'code-highlight' : ''}">${line}</span>`).join('\n');
+    }
 
     function preprocess(s) {
       return ['#', ...s.split('').flatMap(c => [c, '#'])];
@@ -77,22 +108,31 @@
       playState = 'pause';
       updateToggleButton();
       document.getElementById('linesContainer').innerHTML = '';
+      displayCode(-1);
 
       for (let i = 0; i < n; i++) {
+        displayCode(0);
         let mirror = 2 * C - i;
+
         if (i < R) {
+          displayCode(2);
           P[i] = Math.min(R - i, P[mirror]);
         }
 
+        displayCode(5);
         while (i + P[i] + 1 < n && i - P[i] - 1 >= 0 && t[i + P[i] + 1] === t[i - P[i] - 1]) {
           P[i]++;
+          displayCode(6);
+          await waitForNextStep(delay / 2);
         }
 
         if (i + P[i] > R) {
+          displayCode(9);
           C = i;
           R = i + P[i];
         }
 
+        displayCode(12);
         totalCount += Math.floor((P[i] + 1) / 2);
         renderStep(t, P, i, C, R, mirror, totalCount);
         await waitForNextStep(delay);
@@ -143,7 +183,6 @@
       layer.appendChild(line);
       layer.appendChild(label);
 
-      // add connector line
       const connector = document.createElement('div');
       connector.className = 'connector-line';
       connector.style.height = `${60 + P[current] * 20 - 30}px`;
