@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Manacher Count Visualization</title>
+  <style>
+    body { font-family: Arial, sans-serif; text-align: center; margin: 20px; }
+    .char-box { display: inline-block; width: 30px; height: 30px; line-height: 30px; border: 1px solid #ccc; margin: 2px; border-radius: 5px; background-color: #eef; }
+    .highlight { background-color: #ffa; font-weight: bold; }
+    .center { background-color: #8f8 !important; }
+    .mirror { border-color: purple !important; }
+    #display { position: relative; margin-top: 20px; min-height: 200px; }
+    #charContainer { position: relative; z-index: 2; }
+    .line-layer { position: absolute; left: 0; width: 100%; z-index: 1; }
+    .radius-line {
+      position: absolute;
+      height: 2px;
+      background-color: #444;
+    }
+    .radius-label {
+      position: absolute;
+      font-size: 12px;
+      transform: translateX(-50%);
+      background: white;
+      padding: 0 2px;
+    }
+    .connector-line {
+      position: absolute;
+      width: 1px;
+      background: #aaa;
+      border-left: 1px dashed #aaa;
+    }
+  </style>
+</head>
+<body>
+  <h1>Manacher Palindromic Substring Count Visualizer</h1>
+  <input type="text" id="inputString" placeholder="Enter string (e.g. abba)" />
+  <button onclick="startVisualization()">Start</button>
+  <div id="controls">
+    Delay: <input type="range" min="100" max="3000" step="100" value="1200" id="delaySlider">
+    <span id="delayValue">1200ms</span>
+  </div>
+  <div id="playControls">
+    <button id="togglePlayBtn" onclick="togglePlay()">⏸ Pause</button>
+    <button onclick="stepPlay()">⏭ Step</button>
+  </div>
+  <div id="stepInfo"></div>
+  <div id="display">
+    <div id="charContainer"></div>
+    <div id="linesContainer"></div>
+  </div>
+
+  <script>
+    let playState = 'play';
+    let stepResolve = null;
+
+    function preprocess(s) {
+      return ['#', ...s.split('').flatMap(c => [c, '#'])];
+    }
+
+    async function waitForNextStep(delay) {
+      if (playState === 'play') {
+        await new Promise(res => setTimeout(res, delay));
+      } else {
+        await new Promise(res => stepResolve = res);
+      }
+    }
+
+    async function startVisualization() {
+      const input = document.getElementById('inputString').value;
+      const delay = parseInt(document.getElementById('delaySlider').value);
+      const t = preprocess(input);
+      const n = t.length;
+      const P = new Array(n).fill(0);
+      let C = 0, R = 0, totalCount = 0;
+      playState = 'pause';
+      updateToggleButton();
+      document.getElementById('linesContainer').innerHTML = '';
+
+      for (let i = 0; i < n; i++) {
+        let mirror = 2 * C - i;
+        if (i < R) {
+          P[i] = Math.min(R - i, P[mirror]);
+        }
+
+        while (i + P[i] + 1 < n && i - P[i] - 1 >= 0 && t[i + P[i] + 1] === t[i - P[i] - 1]) {
+          P[i]++;
+        }
+
+        if (i + P[i] > R) {
+          C = i;
+          R = i + P[i];
+        }
+
+        totalCount += Math.floor((P[i] + 1) / 2);
+        renderStep(t, P, i, C, R, mirror, totalCount);
+        await waitForNextStep(delay);
+      }
+
+      document.getElementById('stepInfo').innerText = `✅ Total Palindromic Substrings: ${totalCount}`;
+    }
+
+    function renderStep(t, P, current, C, R, mirror, count) {
+      const charContainer = document.getElementById('charContainer');
+      charContainer.innerHTML = '';
+      for (let i = 0; i < t.length; i++) {
+        const span = document.createElement('span');
+        span.className = 'char-box';
+        span.innerText = t[i];
+        if (i === current) span.classList.add('highlight');
+        if (i === C) span.classList.add('center');
+        if (i === mirror && i !== current) span.classList.add('mirror');
+        charContainer.appendChild(span);
+      }
+
+      const boxes = document.querySelectorAll('.char-box');
+      const centerBox = boxes[current];
+      if (!centerBox) return;
+      const spanWidth = centerBox.getBoundingClientRect().width + 4;
+      const centerX = centerBox.offsetLeft + spanWidth / 2;
+
+      const linesContainer = document.getElementById('linesContainer');
+      let layer = document.getElementById(`layer-${P[current]}`);
+      if (!layer) {
+        layer = document.createElement('div');
+        layer.className = 'line-layer';
+        layer.id = `layer-${P[current]}`;
+        layer.style.top = `${60 + P[current] * 20}px`;
+        linesContainer.appendChild(layer);
+      }
+
+      const line = document.createElement('div');
+      line.className = 'radius-line';
+      const width = P[current] * 2 * spanWidth * 0.8;
+      line.style.width = `${width}px`;
+      line.style.left = `${centerX - width / 2}px`;
+
+      const label = document.createElement('div');
+      label.className = 'radius-label';
+      label.innerText = P[current];
+      label.style.left = `${centerX}px`;
+      layer.appendChild(line);
+      layer.appendChild(label);
+
+      // add connector line
+      const connector = document.createElement('div');
+      connector.className = 'connector-line';
+      connector.style.height = `${60 + P[current] * 20 - 30}px`;
+      connector.style.top = `30px`;
+      connector.style.left = `${centerX}px`;
+      linesContainer.appendChild(connector);
+
+      const info = document.getElementById('stepInfo');
+      info.innerText = `Step i=${current}, mirror=${mirror}, C=${C}, R=${R}, P[i]=${P[current]}, Total Count=${count}`;
+    }
+
+    function togglePlay() {
+      if (playState === 'play') {
+        playState = 'pause';
+      } else {
+        playState = 'play';
+        if (stepResolve) {
+          stepResolve();
+          stepResolve = null;
+        }
+      }
+      updateToggleButton();
+    }
+
+    function updateToggleButton() {
+      const btn = document.getElementById('togglePlayBtn');
+      btn.innerText = playState === 'play' ? '⏸ Pause' : '▶ Resume';
+    }
+
+    function stepPlay() {
+      if (playState === 'pause' && stepResolve) {
+        stepResolve();
+        stepResolve = null;
+      }
+    }
+
+    document.getElementById('delaySlider').addEventListener('input', (e) => {
+      document.getElementById('delayValue').innerText = `${e.target.value}ms`;
+    });
+  </script>
+</body>
+</html>
